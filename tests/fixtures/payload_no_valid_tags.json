@@ -1,0 +1,12 @@
+{
+  "metadata": {
+    "title": "Accelerating DETR Convergence via Semantic-Aligned Matching",
+    "conference_name": "Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)",
+    "publication_title": "CVPR 2022",
+    "keywords": ["DETR", "transformer", "object detection"]
+  },
+  "input_tags": ["Transformer", "Object detection", "Training"],
+  "infer_tag": true,
+  "valid_tags_format": "yaml"
+}
+

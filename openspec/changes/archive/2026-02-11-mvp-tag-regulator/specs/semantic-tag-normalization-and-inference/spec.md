@@ -1,0 +1,87 @@
+## ADDED Requirements
+
+### Requirement: Controlled vocabulary constraint
+The skill MUST treat `valid_tags` as the controlled vocabulary, and MUST ensure that every tag in `add_tags` is a member of `valid_tags`.
+
+#### Scenario: Add tag in vocabulary
+- **WHEN** the skill decides a new tag should be added
+- **THEN** it only adds the tag to `add_tags` if it exists in `valid_tags`
+
+### Requirement: Suggest out-of-vocabulary tags
+If the skill identifies a semantically relevant tag that is not present in `valid_tags`, it MUST NOT add it to `add_tags` and MUST instead place it into `suggest_tags` after normalizing it to the tag naming standard.
+
+#### Scenario: Candidate not in valid_tags
+- **WHEN** the skill identifies a relevant tag that is not in `valid_tags`
+- **THEN** it emits the tag in `suggest_tags` and does not include it in `add_tags`
+
+### Requirement: Semantic normalization of input_tags
+The skill SHALL semantically normalize `input_tags` by mapping each input tag to one of:
+- a canonical tag in `valid_tags` (preferred)
+- an out-of-vocabulary canonical candidate (emitted to `suggest_tags`)
+- removal (emit the original input tag in `remove_tags` when it should be removed)
+
+Normalization MUST be based on semantic understanding, not only exact string matching, and MUST follow the naming standard described by the project references (facet conventions, case rules, and path formatting).
+
+#### Scenario: Synonym mapping
+- **WHEN** an `input_tag` is a synonym/paraphrase of a valid controlled tag
+- **THEN** the skill removes the original `input_tag` (include it in `remove_tags`) and adds the controlled tag to `add_tags`
+
+### Requirement: remove_tags constraints
+Every element of `remove_tags` MUST be an element from the received `input_tags` (original strings). The skill MUST NOT invent new strings in `remove_tags`.
+
+#### Scenario: Remove tag is from input
+- **WHEN** the skill outputs `remove_tags`
+- **THEN** each removed tag is present in `input_tags`
+
+### Requirement: add_tags uniqueness
+`add_tags` MUST NOT contain duplicate elements.
+
+#### Scenario: Duplicate prevention
+- **WHEN** multiple inputs/inference paths produce the same controlled tag
+- **THEN** the skill includes that tag only once in `add_tags`
+
+### Requirement: suggest_tags uniqueness
+`suggest_tags` MUST NOT contain duplicate elements.
+
+#### Scenario: Duplicate suggestion prevention
+- **WHEN** multiple reasoning paths produce the same suggested tag
+- **THEN** the skill includes that tag only once in `suggest_tags`
+
+### Requirement: Inference sources and gating
+When inference is enabled, the skill SHALL infer candidate tags using the semantic content of `metadata`, prioritizing (when present) the following fields:
+- `title`
+- `abstract`
+- `keywords`
+- `conference_name`
+- `publication_title`
+
+If `metadata` is missing or empty, inference MUST be disabled.
+
+#### Scenario: Infer from title and abstract
+- **WHEN** inference is enabled and `metadata.title` and `metadata.abstract` are present
+- **THEN** the skill uses those fields to infer candidate tags
+
+### Requirement: Inference output routing
+For each inferred candidate tag:
+- If it exists in `valid_tags`, the skill MUST include it in `add_tags` (deduped).
+- Otherwise, the skill MUST include a normalized form of it in `suggest_tags` (deduped).
+
+#### Scenario: Inferred tag in vocab
+- **WHEN** an inferred tag is present in `valid_tags`
+- **THEN** the skill includes it in `add_tags`
+
+### Requirement: Warnings for low-confidence outputs
+When the skill is uncertain about a normalization or inference decision, it MUST include an entry in `warnings` describing the uncertainty (without violating JSON-only stdout).
+
+#### Scenario: Uncertain inference
+- **WHEN** inference yields multiple plausible tags with low confidence
+- **THEN** the skill uses a conservative output and appends a warning describing the uncertainty
+
+### Requirement: Stable, machine-friendly ordering
+The skill SHALL produce stable outputs suitable for batch automation:
+- `remove_tags` SHOULD preserve the order of the removed tags as they appear in `input_tags`.
+- `add_tags` and `suggest_tags` MUST be output in a stable order (deterministic for the same input payload).
+
+#### Scenario: Repeatable run
+- **WHEN** the skill is run multiple times with the same payload
+- **THEN** it produces identical ordering for `remove_tags`, `add_tags`, and `suggest_tags`

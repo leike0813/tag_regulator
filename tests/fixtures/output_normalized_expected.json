@@ -1,0 +1,11 @@
+{
+  "metadata": { "title": "x" },
+  "input_tags": ["b", "a", "c"],
+  "remove_tags": ["b", "c"],
+  "add_tags": ["a", "m", "z"],
+  "suggest_tags": ["b", "k"],
+  "provenance": { "generated_at": "2026-02-11T00:00:00Z" },
+  "warnings": [],
+  "error": null
+}
+

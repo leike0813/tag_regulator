@@ -1,0 +1,64 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "tag-regulator output schema",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "metadata",
+    "input_tags",
+    "remove_tags",
+    "add_tags",
+    "suggest_tags",
+    "provenance",
+    "warnings",
+    "error"
+  ],
+  "properties": {
+    "metadata": {},
+    "input_tags": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "remove_tags": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "add_tags": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "suggest_tags": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["generated_at"],
+      "properties": {
+        "generated_at": {
+          "type": "string",
+          "pattern": "Z$"
+        }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {}
+    },
+    "error": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["type", "message"],
+          "properties": {
+            "type": { "type": "string" },
+            "message": { "type": "string" }
+          }
+        }
+      ]
+    }
+  }
+}

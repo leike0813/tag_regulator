@@ -1,0 +1,8 @@
+- field:CS/AI/CV
+- field:CS/AI/DL
+- model:DL/Transformer
+- ai_task:detection
+- ai_task:segmentation
+- tool:PyTorch
+- status:2-to-read
+
