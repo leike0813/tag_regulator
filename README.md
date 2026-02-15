@@ -1,6 +1,7 @@
-# tag-regulator
+# tag_regulator
 
-本目录是 `$tag-regulator` 的**可发布 Agent Skill 包**。
+本目录是 `$tag-regulator` 的开发目录。
+发布目录位于 `tag-regulator`。
 
 ## 文档语言规范
 
