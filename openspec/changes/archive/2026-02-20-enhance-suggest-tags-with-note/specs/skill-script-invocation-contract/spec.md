@@ -1,8 +1,5 @@
-# skill-script-invocation-contract Specification
+## MODIFIED Requirements
 
-## Purpose
-TBD - created by archiving change runtime-script-packaging-cleanup. Update Purpose after archive.
-## Requirements
 ### Requirement: SKILL.md 必须声明脚本调用时机
 若发布目录保留运行时脚本，`tag-regulator/SKILL.md` MUST 明确该脚本的调用时机、输入输出约定与执行顺序。当前流程至少包括：
 - 执行开始阶段：`valid_tags` 输入校验脚本
@@ -19,23 +16,7 @@ TBD - created by archiving change runtime-script-packaging-cleanup. Update Purpo
 - **WHEN** skill 执行环境无法调用本地脚本
 - **THEN** 按回退步骤完成 `valid_tags` 合法性校验与输出稳定化（包括对象化 `suggest_tags`），并输出契约兼容结果
 
-### Requirement: 调用脚本不得破坏输出契约
-脚本调用过程 MUST NOT 导致最终 stdout 出现多段文本；最终响应仍必须是单个 JSON 对象。
-
-#### Scenario: 含脚本执行的正常流程
-- **WHEN** 运行时调用了规范化脚本
-- **THEN** 最终 stdout 仍仅包含一个 JSON 对象且字段完整
-
-### Requirement: 启动阶段 valid_tags 校验脚本
-`$tag-regulator` 在进入语义规范化前 MUST 先调用发布目录中的 valid_tags 校验脚本，以确认文件可按允许格式解析，且解析结果为字符串数组。
-
-#### Scenario: 前置校验成功
-- **WHEN** 校验脚本返回成功
-- **THEN** skill 继续执行后续规范化与推断流程
-
-#### Scenario: 前置校验失败
-- **WHEN** 校验脚本返回失败
-- **THEN** skill 立即走失败兜底并输出契约兼容错误 JSON，不进入后续语义流程
+## ADDED Requirements
 
 ### Requirement: SKILL.md 必须声明 tag_note_language 的作用域
 `tag-regulator/SKILL.md` MUST 明确 `tag_note_language` 仅用于指定 `suggest_tags[].note` 的语言，不得影响其他输出字段或决策逻辑。
@@ -43,4 +24,3 @@ TBD - created by archiving change runtime-script-packaging-cleanup. Update Purpo
 #### Scenario: 参数作用域说明清晰
 - **WHEN** 维护者阅读参数说明
 - **THEN** 能明确 `tag_note_language` 不影响 `remove_tags`、`add_tags`、`suggest_tags[].tag`、`warnings` 与 `error`
-

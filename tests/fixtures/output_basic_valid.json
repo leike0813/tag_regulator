@@ -6,9 +6,13 @@
   "input_tags": ["topic:cracking", "tool:pytorch"],
   "remove_tags": ["topic:cracking", "tool:pytorch"],
   "add_tags": ["ai_task:segmentation", "field:CE/UG/Tunnel", "model:DL/UNet", "tool:PyTorch", "topic:crack"],
-  "suggest_tags": [],
+  "suggest_tags": [
+    {
+      "tag": "model:DL/vision-transformer",
+      "note": "Potentially relevant architecture candidate that is not yet in controlled vocabulary."
+    }
+  ],
   "provenance": { "generated_at": "2026-02-11T00:00:00Z" },
   "warnings": [],
   "error": null
 }
-

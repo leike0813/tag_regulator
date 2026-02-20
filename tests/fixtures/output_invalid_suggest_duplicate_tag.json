@@ -1,0 +1,13 @@
+{
+  "metadata": { "title": "x" },
+  "input_tags": [],
+  "remove_tags": [],
+  "add_tags": [],
+  "suggest_tags": [
+    { "tag": "topic:novel-method", "note": "first note" },
+    { "tag": "topic:novel-method", "note": "duplicate tag note" }
+  ],
+  "provenance": { "generated_at": "2026-02-11T00:00:00Z" },
+  "warnings": [],
+  "error": null
+}

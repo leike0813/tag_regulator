@@ -11,11 +11,14 @@ The skill MUST treat the parsed contents of `input.valid_tags` as the controlled
 - **THEN** it only adds the tag to `add_tags` if it exists in the parsed `valid_tags`
 
 ### Requirement: Suggest out-of-vocabulary tags
-If the skill identifies a semantically relevant tag that is not present in `valid_tags`, it MUST NOT add it to `add_tags` and MUST instead place it into `suggest_tags` after normalizing it to the tag naming standard.
+If the skill identifies a semantically relevant tag that is not present in `valid_tags`, it MUST NOT add it to `add_tags` and MUST instead place it into `suggest_tags` after normalizing it to the tag naming standard.  
+Each suggestion entry in `suggest_tags` MUST be an object with:
+- `tag` (normalized candidate tag string)
+- `note` (natural-language explanation of the tag meaning inferred by the agent)
 
 #### Scenario: Candidate not in valid_tags
 - **WHEN** the skill identifies a relevant tag that is not in `valid_tags`
-- **THEN** it emits the tag in `suggest_tags` and does not include it in `add_tags`
+- **THEN** it emits an object `{ "tag": "<normalized-tag>", "note": "<semantic explanation>" }` in `suggest_tags` and does not include that tag in `add_tags`
 
 ### Requirement: Semantic normalization of input_tags
 The skill SHALL semantically normalize `input_tags` by mapping each input tag to one of:
@@ -44,11 +47,11 @@ Every element of `remove_tags` MUST be an element from the received `input_tags`
 - **THEN** the skill includes that tag only once in `add_tags`
 
 ### Requirement: suggest_tags uniqueness
-`suggest_tags` MUST NOT contain duplicate elements.
+`suggest_tags` MUST NOT contain duplicate suggestion tags. The uniqueness key MUST be `suggest_tags[].tag`.
 
 #### Scenario: Duplicate suggestion prevention
-- **WHEN** multiple reasoning paths produce the same suggested tag
-- **THEN** the skill includes that tag only once in `suggest_tags`
+- **WHEN** multiple reasoning paths produce the same suggested tag with different notes
+- **THEN** the skill includes that suggested tag only once in `suggest_tags`
 
 ### Requirement: Inference sources and gating
 When inference is enabled, the skill SHALL infer candidate tags using the semantic content of `metadata`, prioritizing (when present) the following fields:
@@ -67,11 +70,13 @@ If `metadata` is missing or empty, inference MUST be disabled.
 ### Requirement: Inference output routing
 For each inferred candidate tag, the skill MUST route outputs as follows:
 - If it exists in `valid_tags`, the skill MUST include it in `add_tags` (deduped).
-- Otherwise, the skill MUST include a normalized form of it in `suggest_tags` (deduped).
+- Otherwise, the skill MUST include an object in `suggest_tags` containing:
+  - `tag`: normalized inferred tag
+  - `note`: explanation of inferred meaning
 
-#### Scenario: Inferred tag in vocab
-- **WHEN** an inferred tag is present in `valid_tags`
-- **THEN** the skill includes it in `add_tags`
+#### Scenario: Inferred tag out of vocab
+- **WHEN** an inferred tag is not present in `valid_tags`
+- **THEN** the skill outputs that inferred tag as `suggest_tags[].tag` with a corresponding `suggest_tags[].note`
 
 ### Requirement: Warnings for low-confidence outputs
 When the skill is uncertain about a normalization or inference decision, it MUST include an entry in `warnings` describing the uncertainty (without violating JSON-only stdout).
@@ -83,9 +88,17 @@ When the skill is uncertain about a normalization or inference decision, it MUST
 ### Requirement: Stable, machine-friendly ordering
 The skill SHALL produce stable outputs suitable for batch automation:
 - `remove_tags` SHOULD preserve the order of the removed tags as they appear in `input_tags`.
-- `add_tags` and `suggest_tags` MUST be output in a stable order (deterministic for the same input payload).
+- `add_tags` MUST be output in a stable order (deterministic for the same input payload).
+- `suggest_tags` MUST be output in a stable order by `suggest_tags[].tag` (deterministic for the same input payload).
 
 #### Scenario: Repeatable run
 - **WHEN** the skill is run multiple times with the same payload
 - **THEN** it produces identical ordering for `remove_tags`, `add_tags`, and `suggest_tags`
+
+### Requirement: Suggestion note language control
+When `tag_note_language` is provided, the skill MUST express `suggest_tags[].note` in the requested language intent, while preserving the semantic meaning of `suggest_tags[].tag`.
+
+#### Scenario: Chinese note output
+- **WHEN** `tag_note_language=zh-CN` and the skill produces suggestion notes
+- **THEN** each `suggest_tags[].note` is expressed in Chinese intent for the same suggested tag meaning
 

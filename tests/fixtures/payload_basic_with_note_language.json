@@ -1,0 +1,10 @@
+{
+  "metadata": {
+    "title": "Crack segmentation in tunnel linings using UNet",
+    "keywords": ["tunnel", "crack", "segmentation"]
+  },
+  "input_tags": ["topic:cracking", "tool:pytorch"],
+  "valid_tags": ["field:CE/UG/Tunnel", "topic:crack", "ai_task:segmentation", "model:DL/UNet", "tool:PyTorch"],
+  "infer_tag": true,
+  "tag_note_language": "en-US"
+}

@@ -3,9 +3,11 @@
   "input_tags": ["b", "a", "c"],
   "remove_tags": ["b", "c"],
   "add_tags": ["a", "m", "z"],
-  "suggest_tags": ["b", "k"],
+  "suggest_tags": [
+    { "tag": "b", "note": "b-note" },
+    { "tag": "k", "note": "k-first-note" }
+  ],
   "provenance": { "generated_at": "2026-02-11T00:00:00Z" },
   "warnings": [],
   "error": null
 }
-

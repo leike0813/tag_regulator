@@ -64,6 +64,14 @@ def _dedup_check(values: Iterable[str]) -> bool:
     return True
 
 
+def _is_suggest_tag_object(value: Any) -> bool:
+    return (
+        isinstance(value, dict)
+        and isinstance(value.get("tag"), str)
+        and isinstance(value.get("note"), str)
+    )
+
+
 def validate_output_data(
     *,
     output_data: Any,
@@ -86,15 +94,42 @@ def validate_output_data(
     add_tags = output_data.get("add_tags", None)
     suggest_tags = output_data.get("suggest_tags", None)
 
+    if "tag_note_language" in output_data:
+        issues.append(
+            ValidationIssue(
+                path="tag_note_language",
+                message="tag_note_language is an input parameter and must not appear in output",
+            )
+        )
+
     if isinstance(add_tags, list) and all(isinstance(x, str) for x in add_tags):
         if not _dedup_check(add_tags):
             issues.append(ValidationIssue(path="add_tags", message="add_tags must not contain duplicates"))
 
-    if isinstance(suggest_tags, list) and all(isinstance(x, str) for x in suggest_tags):
-        if not _dedup_check(suggest_tags):
-            issues.append(
-                ValidationIssue(path="suggest_tags", message="suggest_tags must not contain duplicates")
-            )
+    if isinstance(suggest_tags, list):
+        if all(_is_suggest_tag_object(x) for x in suggest_tags):
+            suggest_tags_obj: list[dict[str, str]] = suggest_tags
+            suggest_tag_values = [item["tag"] for item in suggest_tags_obj]
+            if not _dedup_check(suggest_tag_values):
+                issues.append(
+                    ValidationIssue(
+                        path="suggest_tags",
+                        message="suggest_tags[].tag must not contain duplicates",
+                    )
+                )
+            if suggest_tag_values != sorted(suggest_tag_values):
+                issues.append(
+                    ValidationIssue(
+                        path="suggest_tags",
+                        message="suggest_tags must be stably sorted by suggest_tags[].tag",
+                    )
+                )
+        elif all(isinstance(x, str) for x in suggest_tags):
+            # Backward-compatible check for historical fixtures.
+            if not _dedup_check(suggest_tags):
+                issues.append(
+                    ValidationIssue(path="suggest_tags", message="suggest_tags must not contain duplicates")
+                )
 
     if isinstance(remove_tags, list) and all(isinstance(x, str) for x in remove_tags):
         if not _dedup_check(remove_tags):
@@ -131,15 +166,33 @@ def validate_output_data(
                         issues.append(
                             ValidationIssue(path="add_tags", message=f"add tag not present in valid_tags: {t!r}")
                         )
-            if isinstance(suggest_tags, list) and all(isinstance(x, str) for x in suggest_tags):
-                for t in suggest_tags:
-                    if t in valid_set:
-                        issues.append(
-                            ValidationIssue(
-                                path="suggest_tags",
-                                message=f"suggest tag MUST NOT be in valid_tags (should be added instead): {t!r}",
+            if isinstance(suggest_tags, list):
+                if all(_is_suggest_tag_object(x) for x in suggest_tags):
+                    suggest_tags_obj = suggest_tags
+                    for idx, item in enumerate(suggest_tags_obj):
+                        tag = item["tag"]
+                        if tag in valid_set:
+                            issues.append(
+                                ValidationIssue(
+                                    path=f"suggest_tags[{idx}].tag",
+                                    message=(
+                                        "suggest tag MUST NOT be in valid_tags (should be added instead): "
+                                        f"{tag!r}"
+                                    ),
+                                )
                             )
-                        )
+                elif all(isinstance(x, str) for x in suggest_tags):
+                    for t in suggest_tags:
+                        if t in valid_set:
+                            issues.append(
+                                ValidationIssue(
+                                    path="suggest_tags",
+                                    message=(
+                                        "suggest tag MUST NOT be in valid_tags (should be added instead): "
+                                        f"{t!r}"
+                                    ),
+                                )
+                            )
 
     return issues
 
