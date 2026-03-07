@@ -1,4 +1,5 @@
 __pycache__/
+**/__pycache__/
 *.pyc
 .mypy_cache/
 .pytest_cache/
@@ -6,3 +7,4 @@ __pycache__/
 .vscode/
 .codex/
 .history/
+.opencode
