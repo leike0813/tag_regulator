@@ -4,33 +4,44 @@
 TBD - created by archiving change mvp-tag-regulator. Update Purpose after archive.
 ## Requirements
 ### Requirement: Controlled vocabulary constraint
-The skill MUST treat the parsed contents of `input.valid_tags` as the controlled vocabulary (`valid_tags`), and MUST ensure that every tag in `add_tags` is a member of that parsed `valid_tags` set.
+When `input.valid_tags` is provided, the skill MUST treat its parsed contents as the controlled vocabulary and MUST ensure that every tag in `add_tags` is a member of that parsed set.
+
+When `input.valid_tags` is absent, the skill MUST NOT emit any `add_tags`.
 
 #### Scenario: Add tag in vocabulary
-- **WHEN** the skill decides a new tag should be added
+- **WHEN** the skill runs with `valid_tags` and decides a new tag should be added
 - **THEN** it only adds the tag to `add_tags` if it exists in the parsed `valid_tags`
 
+#### Scenario: No vocabulary means no additions
+- **WHEN** the skill runs without `valid_tags`
+- **THEN** `add_tags` is empty even if the skill identifies relevant normalized candidates
+
 ### Requirement: Suggest out-of-vocabulary tags
-If the skill identifies a semantically relevant tag that is not present in `valid_tags`, it MUST NOT add it to `add_tags` and MUST instead place it into `suggest_tags` after normalizing it to the tag naming standard.  
+If the skill identifies a semantically relevant tag that is not present in `valid_tags`, or if no `valid_tags` set exists, it MUST NOT add it to `add_tags` and MUST instead place it into `suggest_tags` after normalizing it to the tag naming standard.
+
 Each suggestion entry in `suggest_tags` MUST be an object with:
 - `tag` (normalized candidate tag string)
 - `note` (natural-language explanation of the tag meaning inferred by the agent)
 
 #### Scenario: Candidate not in valid_tags
-- **WHEN** the skill identifies a relevant tag that is not in `valid_tags`
+- **WHEN** the skill identifies a relevant tag that is not in the provided `valid_tags`
 - **THEN** it emits an object `{ "tag": "<normalized-tag>", "note": "<semantic explanation>" }` in `suggest_tags` and does not include that tag in `add_tags`
 
+#### Scenario: Candidate without valid_tags
+- **WHEN** the skill identifies a relevant tag while running without `valid_tags`
+- **THEN** it emits that candidate in `suggest_tags` and leaves `add_tags` empty
+
 ### Requirement: Semantic normalization of input_tags
-The skill SHALL semantically normalize `input_tags` by mapping each input tag to one of:
+When `valid_tags` is provided, the skill SHALL semantically normalize `input_tags` by mapping each input tag to one of:
 - a canonical tag in `valid_tags` (preferred)
 - an out-of-vocabulary canonical candidate (emitted to `suggest_tags`)
 - removal (emit the original input tag in `remove_tags` when it should be removed)
 
-Normalization MUST be based on semantic understanding, not only exact string matching, and MUST follow the naming standard described by the project references (facet conventions, case rules, and path formatting).
+When `valid_tags` is absent, the skill SHALL treat `input_tags` as evidence for pure inference and MUST NOT emit removals based on them.
 
-#### Scenario: Synonym mapping
-- **WHEN** an `input_tag` is a synonym/paraphrase of a valid controlled tag
-- **THEN** the skill removes the original `input_tag` (include it in `remove_tags`) and adds the controlled tag to `add_tags`
+#### Scenario: Pure inference keeps input_tags unchanged
+- **WHEN** an `input_tag` can be normalized but no `valid_tags` was provided
+- **THEN** the normalized candidate is emitted in `suggest_tags` and the original `input_tag` is not emitted in `remove_tags`
 
 ### Requirement: remove_tags constraints
 Every element of `remove_tags` MUST be an element from the received `input_tags` (original strings). The skill MUST NOT invent new strings in `remove_tags`.
@@ -54,41 +65,35 @@ Every element of `remove_tags` MUST be an element from the received `input_tags`
 - **THEN** the skill includes that suggested tag only once in `suggest_tags`
 
 ### Requirement: Inference sources and gating
-When inference is enabled, the skill SHALL infer candidate tags using the semantic content of `metadata`, prioritizing (when present) the following fields:
-- `title`
-- `abstract`
-- `keywords`
-- `conference_name`
-- `publication_title`
+When inference is enabled or pure inference mode is active, the skill SHALL infer candidate tags using available semantic evidence from:
+- `input_tags`
+- `metadata`
+- readable non-empty `digest_markdown`
 
-If `digest_markdown` is provided and readable, the skill SHALL treat digest content as supplemental evidence after metadata for refining domain/task/method/model understanding and improving `suggest_tags[].note` quality.
+If `metadata` is missing but readable non-empty `digest_markdown` exists, inference MUST NOT be disabled solely because metadata is missing.
 
-If `metadata` is missing or empty, inference MUST be disabled.
+#### Scenario: Digest substitutes for metadata
+- **WHEN** metadata is missing and digest markdown is readable and non-empty
+- **THEN** digest content may drive tag inference
 
-#### Scenario: Infer from metadata with digest supplement
-- **WHEN** inference is enabled, metadata fields are present, and `digest_markdown` is readable
-- **THEN** the skill uses metadata as primary evidence and digest as supplemental evidence
-
-#### Scenario: Digest unavailable but inference enabled
-- **WHEN** inference is enabled and `digest_markdown` is missing/unreadable
-- **THEN** the skill continues inference using metadata and records a warning only for unreadable digest cases
+#### Scenario: No digest evidence
+- **WHEN** digest markdown is missing, empty, or unreadable
+- **THEN** digest contributes no inference evidence; unreadable digest is ignored with a warning
 
 ### Requirement: Inference output routing
 For each inferred candidate tag, the skill MUST route outputs as follows:
-- If it exists in `valid_tags`, the skill MUST include it in `add_tags` (deduped).
-- Otherwise, the skill MUST include an object in `suggest_tags` containing:
-  - `tag`: normalized inferred tag
-  - `note`: explanation of inferred meaning
+- If `valid_tags` exists and the candidate exists in it, include it in `add_tags`.
+- Otherwise, include an object in `suggest_tags`.
 
-Digest evidence MUST NOT bypass controlled vocabulary constraints and MUST NOT be used to directly place out-of-vocabulary tags into `add_tags`.
+Digest evidence MUST NOT bypass controlled vocabulary constraints and MUST NOT place tags into `add_tags` when no vocabulary exists.
 
 #### Scenario: Inferred tag out of vocab
-- **WHEN** an inferred tag is not present in `valid_tags`
-- **THEN** the skill outputs that inferred tag as `suggest_tags[].tag` with a corresponding `suggest_tags[].note`
+- **WHEN** an inferred tag is not present in provided `valid_tags`
+- **THEN** the skill outputs that inferred tag as `suggest_tags[].tag`
 
-#### Scenario: Digest suggests out-of-vocabulary concept
-- **WHEN** digest evidence indicates a concept not present in `valid_tags`
-- **THEN** the skill emits it via `suggest_tags` and does not include it in `add_tags`
+#### Scenario: Inferred tag without vocab
+- **WHEN** inference is enabled and `valid_tags` is absent
+- **THEN** inferred candidates are emitted through `suggest_tags` only
 
 ### Requirement: Warnings for low-confidence outputs
 When the skill is uncertain about a normalization or inference decision, it MUST include an entry in `warnings` describing the uncertainty (without violating JSON-only stdout).
@@ -113,4 +118,18 @@ When `tag_note_language` is provided, the skill MUST express `suggest_tags[].not
 #### Scenario: Chinese note output
 - **WHEN** `tag_note_language=zh-CN` and the skill produces suggestion notes
 - **THEN** each `suggest_tags[].note` is expressed in Chinese intent for the same suggested tag meaning
+
+### Requirement: Pure inference cannot be no-op when evidence exists
+When `valid_tags` is absent and at least one evidence source is available, the skill MUST treat pure inference as active even if the user provided `infer_tag=false`.
+
+#### Scenario: Pure inference with false infer_tag
+- **WHEN** `valid_tags` is absent, `infer_tag=false`, and input tag or metadata or digest evidence exists
+- **THEN** the skill emits relevant normalized candidates through `suggest_tags` and keeps `remove_tags=[]` and `add_tags=[]`
+
+### Requirement: Controlled mode input normalization independent from infer_tag
+When `valid_tags` is provided, `infer_tag=false` MUST NOT disable semantic normalization of existing `input_tags`.
+
+#### Scenario: Controlled normalization with false infer_tag
+- **WHEN** `valid_tags` is provided, `infer_tag=false`, and an `input_tag` maps to a controlled tag
+- **THEN** the skill may emit the original tag in `remove_tags` and the controlled tag in `add_tags`
 

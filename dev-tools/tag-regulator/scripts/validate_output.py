@@ -10,6 +10,19 @@ from jsonschema import Draft7Validator
 import yaml
 
 
+ALLOWED_TAG_FACETS = {
+    "field",
+    "topic",
+    "method",
+    "model",
+    "ai_task",
+    "data",
+    "tool",
+    "status",
+    "match_status",
+}
+
+
 @dataclass(frozen=True)
 class ValidationIssue:
     path: str
@@ -72,6 +85,23 @@ def _is_suggest_tag_object(value: Any) -> bool:
     )
 
 
+def _validate_tag_standard_shape(tag: str) -> str | None:
+    if tag.count(":") != 1:
+        return "suggest_tags[].tag must use exactly one ':' separator"
+    facet, path = tag.split(":", 1)
+    if not facet or facet != facet.lower():
+        return "suggest_tags[].tag facet must be lowercase"
+    if facet not in ALLOWED_TAG_FACETS:
+        return f"suggest_tags[].tag facet is not allowed: {facet!r}"
+    if not path:
+        return "suggest_tags[].tag value/path must not be empty"
+    if any(ch.isspace() for ch in tag):
+        return "suggest_tags[].tag must not contain whitespace"
+    if any(segment == "" for segment in path.split("/")):
+        return "suggest_tags[].tag path segments must not be empty"
+    return None
+
+
 def validate_output_data(
     *,
     output_data: Any,
@@ -110,6 +140,10 @@ def validate_output_data(
         if all(_is_suggest_tag_object(x) for x in suggest_tags):
             suggest_tags_obj: list[dict[str, str]] = suggest_tags
             suggest_tag_values = [item["tag"] for item in suggest_tags_obj]
+            for idx, tag in enumerate(suggest_tag_values):
+                tag_issue = _validate_tag_standard_shape(tag)
+                if tag_issue is not None:
+                    issues.append(ValidationIssue(path=f"suggest_tags[{idx}].tag", message=tag_issue))
             if not _dedup_check(suggest_tag_values):
                 issues.append(
                     ValidationIssue(
@@ -148,17 +182,26 @@ def validate_output_data(
                     ValidationIssue(path="remove_tags", message=f"remove tag not present in input_tags: {t!r}")
                 )
 
+    has_valid_tags = False
     if payload_data is not None and isinstance(payload_data, dict):
         payload_input_tags = payload_data.get("input_tags", None)
         payload_valid_tags = payload_data.get("valid_tags", None)
 
         if isinstance(payload_input_tags, list) and all(isinstance(x, str) for x in payload_input_tags):
-            if isinstance(input_tags, list) and input_tags != payload_input_tags:
+            expected_input_tags = payload_input_tags
+        elif "input_tags" not in payload_data:
+            expected_input_tags = []
+        else:
+            expected_input_tags = None
+
+        if expected_input_tags is not None:
+            if isinstance(input_tags, list) and input_tags != expected_input_tags:
                 issues.append(
                     ValidationIssue(path="input_tags", message="output input_tags does not match payload input_tags")
                 )
 
         if isinstance(payload_valid_tags, list) and all(isinstance(x, str) for x in payload_valid_tags):
+            has_valid_tags = True
             valid_set = set(payload_valid_tags)
             if isinstance(add_tags, list) and all(isinstance(x, str) for x in add_tags):
                 for t in add_tags:
@@ -193,6 +236,19 @@ def validate_output_data(
                                     ),
                                 )
                             )
+
+    if (
+        not has_valid_tags
+        and isinstance(add_tags, list)
+        and all(isinstance(x, str) for x in add_tags)
+        and add_tags
+    ):
+        issues.append(
+            ValidationIssue(
+                path="add_tags",
+                message="add_tags must be empty when valid_tags is not provided",
+            )
+        )
 
     return issues
 

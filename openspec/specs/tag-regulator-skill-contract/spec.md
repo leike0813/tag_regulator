@@ -4,14 +4,13 @@
 TBD - created by archiving change mvp-tag-regulator. Update Purpose after archive.
 ## Requirements
 ### Requirement: Input payload fields
-The skill SHALL read a prompt-embedded payload containing `metadata`, `input_tags`, and `infer_tag`, and SHALL read the controlled vocabulary from the Runner input file `input.valid_tags` (file path). The skill SHALL also read:
-- `valid_tags_format` with supported values `yaml`, `json`, `auto` (default `yaml`)
-- `tag_note_language` as a free-form string used to indicate the language intent for tag meaning notes (recommended BCP 47 naming such as `zh-CN`, `en-US`)
-- `digest_markdown` as an optional Markdown file path containing paper digest context
+The skill SHALL read a prompt-embedded payload containing optional `metadata`, optional `input_tags`, and optional `infer_tag`. The Runner input files `input.valid_tags` and `input.digest_markdown` SHALL be optional.
 
-#### Scenario: Payload present with note language and digest path
-- **WHEN** the prompt contains `metadata`, `input_tags`, optional `infer_tag`, optional `valid_tags_format`, optional `tag_note_language`, optional `digest_markdown`, and Runner provides a readable `input.valid_tags` file path
-- **THEN** the skill treats these as the only source of truth for the run
+If `input_tags` is missing, the skill MUST treat it as an empty string array for processing and output echoing.
+
+#### Scenario: Missing input_tags
+- **WHEN** the prompt does not contain `input_tags`
+- **THEN** the skill treats `input_tags` as `[]` and still includes `"input_tags": []` in output
 
 ### Requirement: Non-interactive execution
 The skill MUST run in non-interactive mode and MUST NOT ask the user to make decisions during execution. Any ambiguity MUST be resolved by default behavior and the skill MUST continue to completion.
@@ -52,26 +51,40 @@ The output `metadata` and `input_tags` values MUST match the received payload ex
 - **THEN** the output JSON includes the same values for `metadata` and `input_tags`
 
 ### Requirement: Default infer_tag behavior
-The skill MUST determine whether tag inference is enabled according to the following rules:
-1) If `metadata` is missing or empty, inference MUST be disabled (`infer_tag=false`) regardless of user intent.
-2) If the user explicitly provides `infer_tag` and it can be interpreted as true/false, the skill MUST use that meaning.
-3) If `infer_tag` is explicitly provided but cannot be interpreted as true/false, inference MUST default to enabled (`infer_tag=true`).
-4) If `infer_tag` is not provided and `metadata` is present and non-empty, inference MUST default to enabled (`infer_tag=true`).
+The skill MUST determine effective tag inference according to available evidence and mode:
 
-#### Scenario: Missing metadata disables inference
-- **WHEN** `metadata` is missing or empty
-- **THEN** the skill treats inference as disabled and does not attempt to infer tags
+1) In controlled vocabulary mode, `input_tags` normalization MUST still run when `input_tags` exist, regardless of `infer_tag`.
+2) In controlled vocabulary mode, explicit `infer_tag=false` MUST disable metadata/digest-driven additional inference.
+3) In controlled vocabulary mode, if `infer_tag` is missing or cannot be interpreted and metadata or readable digest evidence exists, inference defaults to enabled.
+4) In pure inference mode, `infer_tag=false` MUST NOT disable inference from available `input_tags`, metadata, or readable digest evidence.
+5) If no usable evidence exists, the skill MUST return an `insufficient_input` error.
+
+#### Scenario: Digest-only inference evidence
+- **WHEN** `metadata` is missing or empty, readable non-empty `digest_markdown` is provided, and inference is otherwise enabled
+- **THEN** the skill may infer tags from digest evidence
+
+#### Scenario: Controlled mode explicit false
+- **WHEN** `valid_tags` is provided and `infer_tag=false`
+- **THEN** the skill still normalizes existing `input_tags` but does not add metadata/digest-only inferred tags
+
+#### Scenario: Pure inference explicit false
+- **WHEN** `valid_tags` is absent, `infer_tag=false`, and any usable evidence exists
+- **THEN** the skill still produces pure inference `suggest_tags` when relevant
 
 ### Requirement: Failure handling for missing input_tags or valid_tags
-If reading `input_tags` fails OR reading/parsing/validating `input.valid_tags` fails (missing/unreadable/invalid type/encoding/format/content shape error), the skill MUST return schema-compatible output with:
+If reading `input_tags` fails, OR if `input.valid_tags` is provided but reading/parsing/validating it fails (unreadable/invalid type/encoding/format/content shape error), the skill MUST return schema-compatible output with:
 - `remove_tags=[]`
 - `add_tags=[]`
 - `error` set to a non-null object describing the failure
 
-`warnings` MUST still be present (may be empty), `provenance.generated_at` MUST still be present, and `metadata`/`input_tags` MUST be echoed if available.
+Missing `input.valid_tags` MUST NOT trigger this failure handling.
+
+#### Scenario: valid_tags missing
+- **WHEN** `input.valid_tags` is not provided
+- **THEN** the skill continues in pure inference mode with `error=null`
 
 #### Scenario: valid_tags content shape invalid
-- **WHEN** `input.valid_tags` can be read but parsed result is not a top-level list of strings
+- **WHEN** `input.valid_tags` is provided and can be read but parsed result is not a top-level list of strings
 - **THEN** the skill returns schema-compatible output with empty `remove_tags` and `add_tags` and a non-null `error` object
 
 ### Requirement: Error object shape (minimal)
@@ -139,4 +152,27 @@ The parsed content of `input.valid_tags` MUST be a top-level array/list whose ev
 #### Scenario: Unreadable digest_markdown
 - **WHEN** `digest_markdown` is provided but file reading fails due to permissions/path/encoding issues
 - **THEN** the skill appends a warning and ignores digest context while continuing the run
+
+### Requirement: Pure inference output shape
+When `input.valid_tags` is absent, the output JSON MUST still include all required keys and MUST set:
+- `remove_tags=[]`
+- `add_tags=[]`
+
+The skill MAY include normalized candidates in `suggest_tags`.
+
+#### Scenario: Pure inference suggestions
+- **WHEN** the skill runs without `input.valid_tags` and identifies relevant normalized tag candidates
+- **THEN** it emits those candidates in `suggest_tags`, keeps `remove_tags=[]` and `add_tags=[]`, and sets `error=null`
+
+### Requirement: Insufficient input failure
+If `metadata`, readable non-empty `digest_markdown`, `input_tags`, and `valid_tags` are all absent or empty, the skill MUST return schema-compatible output with:
+- `input_tags=[]`
+- `remove_tags=[]`
+- `add_tags=[]`
+- `suggest_tags=[]`
+- `error.type="insufficient_input"`
+
+#### Scenario: No usable inputs
+- **WHEN** the payload provides no metadata, no input tags, no valid_tags, and no readable non-empty digest markdown
+- **THEN** the skill returns an `insufficient_input` error JSON and does not attempt semantic inference
 
